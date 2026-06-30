@@ -1,0 +1,65 @@
+邮箱自动监控与AI自动回复系统(快速落地版MVP)
+
+一、目标
+在无法接入IMAP、POP3、Graph API的情况下，利用Playwright模拟浏览器操作，实现邮箱监控、邮件分析和自动回复。
+二、MVP范围
+1.支持单个OutlookWeb 邮箱
+2.监控指定发件人
+3.获取邮件主题与正文
+4.调用AI模型生成回复
+5.自动点击回复并发送
+6.MySQL记录处理日志
+三、技术选型
+前端:无(首版可选)
+后端:Python
+数据库:MySQL8
+自动化:Playwright
+AI模型:DeepSeek/OpenAl/Qwen/Ollama (换
+部署:Windows 服务器或云主机
+四、采统架构
+定时任务->Playwright登录邮箱->检查新邮件->发件人匹配->AI生成回复->自动发送
+->MySQL记录结果
+五、核心流程
+步骤1:人工登录一次邮箱
+步骤2:保存Playwright登录状态文件
+步骤3:每分钟检查收件箱
+步骤4:识别指定发件人邮件
+步骤5:提取邮件正文
+步骤6:调用AI生成回复
+步骤7:写入回复内容
+步骤8:自动发送
+步骤9:记录日志避免重复回复
+六、数据库设计:
+mailbox:邮箱配置
+rule:监控规则
+emailrecord:邮件记录
+reply_record:回复记录
+七、关键表字段
+mailbox(id,email,state_file,status)
+rule(id,sender_pattern,prompt_template,auto_send)
+email_record(id,mail_uid,sender,subject,content,processed)reply_record(id,email id,reply_content,status)
+八、AI接口设计
+统一适配器接口:
+Generate(email_content)->reply_content
+通过配置切换不同大模型。
+九，部署方案
+Python + Playwright + MySQL
+Docker可选
+建议单机部署。
+十、开发周期
+Day1:邮箱登录与邮件读取
+Day2:AI回复集成
+Day3:自动发送
+Day4:MySQL 日志
+Day5:测试与上线
+十一、后续优化
+1.多邮箱支持
+2.Web管理后台
+3.人工审核模式
+4.Redis任务队列
+5.浏览器池
+6.RAG知识库
+7.企业级权限管理
+十二、推荐MVP原则
+先只实现:监控->分析->回复。
+暂不开发复杂后台、权限管理和分布式架构，5天左右即可完成验证版本。

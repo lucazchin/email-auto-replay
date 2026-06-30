@@ -1,0 +1,24 @@
+# EWS Exchange 协议操作（替代 Playwright）
+exchangelib==5.5.0
+
+# 定时任务
+APScheduler==3.10.4
+
+# 数据库
+PyMySQL==1.1.1
+dbutils==3.1.0
+
+# AI 接口
+openai==1.58.1
+requests==2.32.3
+
+# 配置与工具
+PyYAML==6.0.2
+html2text==2024.2.26
+python-dotenv==1.0.1
+
+# 日志
+loguru==0.7.3
+
+# 测试（开发环境）
+pytest==8.3.4
