@@ -1,41 +1,38 @@
 # 邮箱自动监控与 AI 自动回复系统
 
-基于 Playwright 模拟浏览器操作，在无法接入 IMAP/POP3/Graph API 的受限环境下，实现 Exchange OWA 邮箱自动监控与 AI 回复。
+基于 **EWS (exchangelib)** 纯 API 操作 Exchange 邮箱，支持 AI 智能回复与正则规则引擎双模式。
+
+## 核心特性
+
+- **纯 API 操作**：通过 EWS 协议收发邮件，无需浏览器，延迟 10 秒内
+- **双引擎回复**：AI 模式（DeepSeek/OpenAI/Qwen/Ollama）和正则引擎模式（毫秒级，零成本）
+- **智能简历提取**：支持 HTML 表格 (`table:姓名`) 和纯文本垂列表 (`text:姓名`) 两种格式自动识别
+- **多条件规则匹配**：可按发件人、主题、正文正则组合匹配（AND/OR 逻辑），带优先级排序
+- **三重去重**：mail_uid 唯一索引 + 幂等检查 + 发件人+主题二次去重
+- **敏感信息保护**：所有凭据通过 `.env` 环境变量注入，代码中无明文密码
 
 ## 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-# 创建虚拟环境
 python -m venv .venv
+source .venv/bin/activate   # Linux/Mac
+# .venv\Scripts\activate    # Windows
 
-# Windows
-.venv\Scripts\activate
-# Linux/Mac
-source .venv/bin/activate
-
-# 安装依赖
 pip install -r requirements.txt
-
-# 安装 Playwright 浏览器
-playwright install chromium
 ```
 
 ### 2. 配置
 
 ```bash
-# 复制配置模板
-copy config.yaml.example config.yaml    # Windows
-cp config.yaml.example config.yaml      # Linux
+# 环境变量（必须：所有敏感凭据）
+cp .env.example .env
+# 编辑 .env，填写数据库密码、AI Key、邮箱凭据
 
-# 编辑 config.yaml，填写数据库和 AI 配置
-
-# 复制环境变量模板
-copy .env.example .env                  # Windows
-cp .env.example .env                    # Linux
-
-# 编辑 .env，填写密码
+# 主配置（非敏感参数：轮询间隔、日志级别等）
+cp config.yaml.example config.yaml
+# 编辑 config.yaml，按需调整
 ```
 
 ### 3. 初始化数据库
@@ -44,130 +41,216 @@ cp .env.example .env                    # Linux
 mysql -u root -p < db/init_db.sql
 ```
 
-### 4. 首次登录
+`init_db.sql` 会自动创建 `email_auto_reply` 库和 4 张表，并插入示例规则。
 
-支持两种模式：
-
-**自动登录模式（推荐）**：在 `.env` 中配置 `OWA_USERNAME` 和 `OWA_PASSWORD`，并在 `config.yaml` 中设置 `owa.credentials.enabled: true`：
-
-```bash
-python login.py
-# 系统自动填入账号密码登录，检测到 MFA 时回退人工模式
-```
-
-**人工登录模式**：不配置凭据或设置 `owa.credentials.enabled: false`：
-
-```bash
-python login.py
-# 浏览器会打开，手动完成登录后按 Enter 保存状态
-```
-
-### 5. 启动监控
+### 4. 启动监控
 
 ```bash
 python main.py
-# 启动时自动校验登录态，过期则自动重新登录
-# 运行中检测到登录态过期也会自动重登（无需人工介入）
 ```
+
+启动后系统自动连接 Exchange、定时轮询收件箱，匹配规则后执行回复。
 
 ## 项目结构
 
 ```
 email-auto-replay/
-├── config.yaml              # 主配置（从 .example 复制）
-├── .env                     # 环境变量（从 .example 复制）
+├── main.py                    # 入口：EWS 连接 + 定时调度
+├── config.yaml                # 主配置（非敏感参数）
+├── .env                       # 环境变量（敏感凭据，gitignore）
+├── .env.example               # 环境变量模板
+├── config.yaml.example        # 配置模板
 ├── requirements.txt
-├── main.py                  # 入口：启动定时任务
-├── login.py                 # 一次性登录脚本
+│
 ├── config/
-│   └── loader.py            # 配置加载与校验
-├── browser/
-│   ├── context_manager.py   # 浏览器上下文管理
-│   ├── auth_checker.py      # 登录态校验
-│   ├── auto_login.py        # 自动登录模块（账号密码 + MFA 兜底）
-│   ├── selectors.py         # OWA 选择器配置
-│   ├── selector_helper.py   # 多级回退选择器工具
-│   ├── reply_sender.py      # 回复发送（contenteditable 输入）
-│   └── stealth.py           # 反自动化检测
-├── monitor/
-│   ├── inbox_checker.py     # 收件箱轮询核心逻辑
-│   ├── sender_matcher.py    # 发件人规则匹配
-│   ├── content_extractor.py # 邮件正文清洗
-│   └── health_check.py      # 系统健康检查
-├── ai/
-│   ├── base.py              # AI 适配器基类 + 重试
-│   ├── openai_adapter.py    # DeepSeek/OpenAI/Qwen 适配
-│   ├── ollama_adapter.py    # Ollama 本地模型适配
-│   └── adapter_factory.py   # 适配器工厂
-├── db/
-│   ├── connection.py        # 连接池管理
-│   ├── models.py            # 数据操作层
-│   └── init_db.sql          # 建表 SQL
+│   └── loader.py              # 配置加载器（YAML + .env 合并，必填校验）
+│
+├── ewser/                     # EWS 模块
+│   ├── connection.py          # EWS 连接管理器（单例）
+│   └── reply.py               # 回复发送器
+│
+├── monitor/                   # 监控核心
+│   ├── inbox_checker.py       # 收件箱轮询 + 完整处理管道
+│   ├── rule_matcher.py        # 多条件规则匹配引擎
+│   ├── sender_matcher.py      # 遗留（已委托到 RuleMatcher）
+│   └── content_extractor.py   # 正文清洗（去引用、去签名）
+│
+├── ai/                        # AI 模块
+│   ├── base.py                # AI 适配器抽象基类
+│   ├── openai_adapter.py      # DeepSeek / OpenAI / Qwen
+│   ├── ollama_adapter.py      # Ollama 本地模型
+│   ├── adapter_factory.py     # 适配器工厂
+│   └── regex_engine.py        # 正则规则回复引擎（无 AI 依赖）
+│
+├── db/                        # 数据库
+│   ├── connection.py          # 连接池（DBUtils + PyMySQL）
+│   ├── models.py              # 数据操作层（Mailbox / Rule / EmailRecord / ReplyRecord）
+│   ├── init_db.sql            # 建表 + 示例数据
+│   ├── migrate_rule_v2.sql    # V2 多条件规则迁移
+│   ├── migrate_add_system_prompt.sql
+│   ├── migrate_add_regex_reply.sql
+│   └── migrate_text_extraction.sql
+│
 ├── utils/
-│   ├── logger_setup.py      # 日志系统配置
-│   └── exceptions.py        # 自定义异常
-├── state/                   # 登录状态（gitignore）
-├── logs/                    # 运行日志（gitignore）
-└── tests/                   # 测试
+│   ├── logger_setup.py        # 日志系统（loguru）
+│   └── exceptions.py          # 自定义异常体系
+│
+├── logs/                      # 运行日志（gitignore）
+├── state/                     # 登录状态（gitignore，EWS 版不使用）
+├── tests/                     # 测试
+│
+└── browser/                   # 遗留：Playwright/OWA 代码（不再被 main.py 引用）
 ```
 
 ## 配置说明
 
-### config.yaml 关键配置
+### 环境变量（`.env`）
 
-| 配置项 | 说明 |
-|--------|------|
-| `owa.url` | OWA 邮箱地址（默认: mail.hengtiansoft.com） |
-| `owa.state_file` | 登录状态文件路径 |
-| `owa.credentials.enabled` | 是否启用自动登录 |
-| `owa.credentials.username` | 邮箱账号（建议用环境变量 OWA_USERNAME） |
-| `owa.credentials.password` | 邮箱密码（建议用环境变量 OWA_PASSWORD） |
-| `owa.credentials.mfa_fallback` | 检测到 MFA 时回退人工处理 |
-| `ai.provider` | AI 模型（deepseek/openai/qwen/ollama） |
-| `scheduler.interval_minutes` | 轮询间隔（分钟） |
-| `browser.headless` | 是否无头模式（调试时建议 false） |
+| 变量 | 说明 | 必填 |
+|------|------|:---:|
+| `DB_PASSWORD` | MySQL 密码 | ✅ |
+| `AI_API_KEY` | DeepSeek / OpenAI API Key | ✅ |
+| `EWS_EMAIL` | 邮箱账号 | ✅ |
+| `EWS_PASSWORD` | 邮箱密码 | ✅ |
+| `EWS_SERVER` | Exchange 服务器地址 | ✅ |
 
-### 数据库表
+环境变量优先级高于 `config.yaml` 中的同名字段。
 
-| 表名 | 用途 |
+### config.yaml
+
+| 配置段 | 关键参数 | 说明 |
+|--------|---------|------|
+| `database` | host, port, user, database, pool_size | MySQL 连接（密码通过 DB_PASSWORD 环境变量） |
+| `ai` | provider, model, max_tokens, temperature | AI 模型参数（API Key 通过 AI_API_KEY 环境变量） |
+| `ews` | max_emails_per_run | 单次轮询最大处理数（凭据通过环境变量） |
+| `scheduler` | interval_seconds | 轮询间隔（秒），默认 1 |
+| `logging` | level, dir, rotation, retention | 日志配置 |
+| `alert` | enabled, webhook_url | 告警通知（可选） |
+
+## 数据库
+
+### 表结构
+
+| 表名 | 用途 | 关键字段 |
+|------|------|---------|
+| `mailbox` | 邮箱配置 | email, status |
+| `rule` | 监控规则 | sender_pattern, subject_pattern, content_pattern, match_logic, priority, reply_mode, reply_pattern, reply_template, system_prompt, auto_send |
+| `email_record` | 邮件记录 | mail_uid (UNIQUE), sender, subject |
+| `reply_record` | 回复记录 | reply_content, status (pending/sent/failed) |
+
+### 规则字段说明
+
+| 字段 | 说明 |
 |------|------|
-| `mailbox` | 邮箱配置 |
-| `rule` | 监控规则（发件人正则 + AI 提示词） |
-| `email_record` | 邮件记录（含 mail_uid 唯一标识防重复） |
-| `reply_record` | 回复记录（pending/sent/failed） |
+| `sender_pattern` | 发件人正则（匹配 "显示名 \<邮箱\>"、纯邮箱、纯显示名） |
+| `subject_pattern` | 主题正则 |
+| `content_pattern` | 正文正则 |
+| `match_logic` | 匹配逻辑：`AND`（全部满足）或 `OR`（任一满足） |
+| `priority` | 优先级（越小越高），命中后不再继续匹配 |
+| `reply_mode` | 回复模式：`regex`（正则引擎）或 `ai`（AI 生成） |
+| `reply_pattern` | 正则提取模式：`table:<表头>` / `text:<表头>` / 普通正则 |
+| `reply_template` | 回复模板，`\1` 为匹配结果占位符 |
+| `system_prompt` | 自定义 AI System Prompt（仅 AI 模式，NULL 使用默认值） |
+| `auto_send` | 是否自动发送（0=仅记录不发送） |
 
 ## 运行流程
 
 ```
-每分钟定时触发
-    → 加载已保存的登录状态
-    → 访问 OWA 收件箱
-    → 遍历邮件列表
-    → 检查 mail_uid 是否已处理
-    → 匹配发件人规则
-    → 提取邮件主题+正文
-    → AI 生成回复
-    → 点击回复 → 输入内容 → 发送
-    → 写入 MySQL 日志
+定时触发 (interval_seconds)
+  │
+  ├─ 查询启用邮箱 (mailbox.status=1)
+  │
+  ├─ 遍历未读邮件 (filter is_read=False, limit max_emails)
+  │
+  ├─ 仅处理最新一封（抢简历场景：抢最新到达）
+  │
+  ├─ 三重去重检查
+  │   ├── mail_uid 唯一索引
+  │   ├── is_processed() 幂等判断
+  │   └── 发件人+主题二次去重（剥离 Re:/Fwd: 前缀）
+  │
+  ├─ 规则匹配 (按 priority 升序，第一条命中即停止)
+  │
+  ├─ 正文清洗 (HTML→文本 → 去引用 → 去签名 → 压缩空白)
+  │
+  ├─ 回复生成
+  │   ├── reply_mode=regex → RegexReplyEngine
+  │   │   ├── table:<表头> → HTML 表格列提取 → 失败回退 text 模式
+  │   │   ├── text:<表头>  → 纯文本垂列表提取 → 失败回退 table 模式
+  │   │   └── 普通正则     → re.search + match.expand
+  │   │   └── 全部失败     → 静默跳过，不回复
+  │   │
+  │   └── reply_mode=ai → AI Adapter
+  │       ├── 替换 {email_content} 占位符
+  │       ├── 超过 12000 字符自动截断
+  │       └── 最多重试 retry_times 次
+  │
+  ├─ 入库 (INSERT IGNORE email_record + INSERT reply_record)
+  │
+  ├─ 发送回复 (auto_send=1 → EWSReplySender)
+  │
+  └─ 标记已读 (message.is_read = True)
 ```
+
+## 回复引擎
+
+### AI 模式
+
+支持四种后端：`deepseek` / `openai` / `qwen`（共用 OpenAIAdapter）和 `ollama`（本地模型）。
+
+AI 模式下规则可自定义 `system_prompt`，不设置则使用默认 System Prompt。
+
+### 正则引擎（毫秒级，零 API 成本）
+
+无需调用 AI，通过正则从邮件中提取结构化信息后按模板生成回复。
+
+内置三种提取模式：
+
+**1. HTML 表格模式 (`table:<表头>`)**
+```
+reply_pattern: "table:姓名"
+```
+解析 HTML `<table>` 标签，按表头关键字定位列，提取该列所有数据行。适用于标准表格简历。
+
+**2. 纯文本模式 (`text:<表头>`)**
+```
+reply_pattern: "text:姓名"
+```
+解析纯文本垂列表格式，多策略提取（块对齐 → 日期-姓名模式 → 单行兜底）。适用于无 HTML 表格的简历。
+
+**3. 标准正则模式**
+```
+reply_pattern: "(\d{1,2}/\d{1,2}[\s\S]*?)(?=\d{1,2}/\d{1,2}|$)"
+reply_template: "\1"
+```
+使用 Python `re` 模块的标准正则匹配和模板展开。
+
+> 注：`table` 和 `text` 模式会自动互相回退——当一种模式提取失败时，引擎自动尝试另一种，无需手动切换。
 
 ## 常见问题
 
-### 登录态过期
+### Exchange 连接失败
 
-系统支持自动登录时无需人工介入：
-1. 启动时自动检测登录态，过期则自动重新登录
-2. 运行中每 10 分钟主动校验一次登录态
-3. 自动登录失败（凭据错误等）会暂停监控并告警，需人工处理
+确认 `.env` 中的 `EWS_EMAIL`、`EWS_PASSWORD`、`EWS_SERVER` 正确。可使用工作区中的 `verify_ews.py` 验证连接：
+```bash
+python verify_ews.py
+```
 
-如未配置自动登录，运行日志出现 "登录态已过期" 时：
-1. 重新运行 `python login.py`
-2. 完成登录后系统会自动恢复监控
+### 规则不生效
 
-### 选择器失效
+1. 检查规则 `enabled` 是否为 1
+2. 检查 `sender_pattern` 是否匹配实际发件人格式（"显示名 \<邮箱\>"）
+3. 多个规则时，被高优先级规则（priority 值小）拦截
 
-OWA 页面更新可能导致选择器失效。所有选择器集中在 `browser/selectors.py`，每个元素有多级回退。如全部失效，使用浏览器开发者工具检查新的 DOM 结构并更新选择器。
+### 正则引擎未提取到内容
 
-### 回复输入失败
+1. 确认邮件正文包含表格或垂列表
+2. `table` 模式需要邮件为 HTML 格式；`text` 模式需要换行保留（`text_body` 存在）
+3. 查看日志确认引擎走到了哪个分支
 
-OWA 回复框是 contenteditable div，不能使用 fill()。系统使用三级策略：keyboard.type → evaluate innerHTML → 逐字输入。如仍有问题，检查 `browser/reply_sender.py`。
+### 同一封邮件被重复处理
+
+三种去重机制会自动拦截：
+- `mail_uid` 基于 Exchange `message_id`，全局唯一
+- 相同发件人+主题（去除 `Re: ` 前缀）生成过回复不再重复处理
+- 如仍有问题，检查 `email_record` 表 `mail_uid` 是否正确写入

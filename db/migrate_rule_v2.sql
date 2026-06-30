@@ -64,10 +64,10 @@ WHERE rule_name IS NULL;
 -- 规则3：正文提到"会议"+主题提到"邀请"（AND 逻辑）
 -- INSERT INTO rule (mailbox_id, rule_name, sender_pattern, subject_pattern, content_pattern,
 --                   match_logic, priority, prompt_template, auto_send, enabled)
--- VALUES (1, '会议邀请-确认参加',
---         NULL, '邀请|invite', '会议|meeting|schedule',
+-- VALUES (1, '抢简历',
+--         NULL, '简历', '姓名|院校|岗位',
 --         'AND', 20,
---         '收到会议邀请邮件，请生成一封确认参加的回复：\n{email_content}\n请确认时间地点，并表示会准时参加。',
+--         '收到简历邮件，请生成一封对应岗位的指定候选人姓名邮件：\n{email_content}\n请确认是否符合要求。',
 --         1, 1);
 
 -- 规则4：外部客户邮件（Gmail/163/Outlook），主题或正文含"咨询"

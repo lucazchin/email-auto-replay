@@ -3,7 +3,7 @@ database:
   host: "127.0.0.1"
   port: 3306
   user: "root"
-  password: ""                # 建议通过环境变量 DB_PASSWORD 覆盖
+  password: ""                # 通过环境变量 DB_PASSWORD 设置
   database: "email_auto_reply"
   pool_size: 5
   pool_recycle: 3600
@@ -11,72 +11,34 @@ database:
 # ============ AI 模型配置 ============
 ai:
   provider: "deepseek"        # deepseek / openai / qwen / ollama
-  api_key: ""                 # 环境变量 AI_API_KEY 覆盖
+  api_key: ""                 # 通过环境变量 AI_API_KEY 设置
   base_url: "https://api.deepseek.com/v1"
   model: "deepseek-chat"
-  max_tokens: 1000
+  max_tokens: 2000
   temperature: 0.7
   timeout: 30
   retry_times: 3
   retry_interval: 5
 
-# ============ 浏览器配置 ============
-browser:
-  headless: false             # MVP 阶段建议 false，便于调试
-  slow_mo: 100                # 操作间隔（毫秒），模拟人工节奏
-  viewport:
-    width: 1920
-    height: 1080
-  user_agent: ""              # 留空使用默认
-  timeout: 30000
-
-# ============ OWA 邮箱配置 ============
-# 企业 Exchange OWA 地址
-owa:
-  url: "https://mail.hengtiansoft.com/owa/"
-  inbox_path: "#path=/mail"
-  state_file: "state/owa_state.json"
+# ============ EWS 邮箱配置 ============
+ews:
+  email: ""                   # 通过环境变量 EWS_EMAIL 设置
+  password: ""                # 通过环境变量 EWS_PASSWORD 设置
+  server: ""                  # 通过环境变量 EWS_SERVER 设置
   max_emails_per_run: 20
-  page_load_timeout: 60000
-
-  # ----- 自动登录配置 -----
-  credentials:
-    enabled: true              # 是否启用自动登录
-    username: ""               # 邮箱账号或域\用户名，建议用环境变量 OWA_USERNAME
-    password: ""               # 邮箱密码，建议用环境变量 OWA_PASSWORD
-    domain: ""                 # 域名（域\用户名格式时留空；单独填则拼接为 domain\username）
-    login_timeout: 60          # 自动登录整体超时（秒）
-    mfa_fallback: true         # 检测到二次验证时回退人工处理
-    retry_times: 2             # 登录失败重试次数（不含首次）
-    retry_interval: 5          # 重试间隔（秒）
-    stay_signed_in: true       # 是否在"保持登录"提示时点"是"
 
 # ============ 定时任务配置 ============
 scheduler:
-  # 轮询间隔（秒）。时效性优先建议 10-15 秒
-  interval_seconds: 10
+  interval_seconds: 1         # 收件箱检查间隔（秒）
   max_instances: 1
   coalesce: true
 
-  # 新邮件快速检测：检查未读数变化，有新邮件立即处理
-  fast_detect:
-    enabled: true               # 是否启用快速检测
-    check_interval_seconds: 3   # 快速检测间隔（秒），时效性优先建议 2-3 秒
-    unread_count_selector: ""   # 未读数元素选择器（留空自动检测）
-
 # ============ 日志配置 ============
 logging:
-  level: "INFO"               # 调试时可改为 DEBUG
+  level: "INFO"
   dir: "logs"
   rotation: "10 MB"
   retention: "30 days"
-
-# ============ 截图监控配置 ============
-# 在关键节点自动截图，便于调试 OWA 页面状态
-# 截图保存到 logs/screenshots/ 目录
-screenshot:
-  enabled: true               # 是否启用截图
-  dir: "logs/screenshots"     # 截图保存目录
 
 # ============ 告警配置 ============
 alert:
